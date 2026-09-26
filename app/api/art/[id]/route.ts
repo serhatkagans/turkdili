@@ -1,0 +1,2 @@
+import {runtime} from '../../../../lib/server';
+export async function GET(_r:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;if(!/^[a-f0-9-]{36}$/.test(id))return new Response('Bulunamadı',{status:404});const obj=await runtime.ART.get(`${id}.png`);if(!obj)return new Response('Bulunamadı',{status:404});return new Response(obj.body as unknown as ReadableStream,{headers:{'Content-Type':'image/png','Cache-Control':'public,max-age=31536000,immutable'}});}

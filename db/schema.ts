@@ -1,0 +1,2 @@
+import {sqliteTable,text,integer,index} from 'drizzle-orm/sqlite-core';
+export const cards=sqliteTable('cards',{id:text('id').primaryKey(),wordId:text('wordId').notNull(),sentence:text('sentence').notNull(),nickname:text('nickname').notNull(),scene:text('scene').notNull(),style:text('style').notNull(),image:text('image').notNull(),mode:text('mode').notNull(),createdAt:integer('createdAt').notNull(),approved:integer('approved').notNull().default(0)},t=>[index('cards_gallery').on(t.approved,t.createdAt)]);
