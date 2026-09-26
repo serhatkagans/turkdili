@@ -1,2 +1,4 @@
 import {runtime} from '../../../lib/server';
-export function GET(){return Response.json({ai:!!(runtime.IMAGE_SERVICE_URL&&runtime.IMAGE_SERVICE_TOKEN),admin:!!runtime.ADMIN_TOKEN});}
+import {imageEnabled,textEnabled} from '../../../lib/ai';
+export const dynamic='force-dynamic';
+export function GET(){return Response.json({ai:imageEnabled(),teacher:textEnabled(),admin:!!runtime.ADMIN_TOKEN});}

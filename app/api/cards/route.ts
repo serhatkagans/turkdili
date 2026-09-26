@@ -1,12 +1,25 @@
-import {database,runtime,sameOrigin} from '../../../lib/server';
-import {words} from '../../../lib/words';
-export async function GET(request:Request){try{const db=await database();const id=new URL(request.url).searchParams.get('id');if(id){const card=await db.prepare('SELECT * FROM cards WHERE id = ?').bind(id).first();return Response.json({card},{status:card?200:404,headers:{'Cache-Control':'no-store'}});}const result=await db.prepare('SELECT * FROM cards WHERE approved = 1 ORDER BY createdAt DESC LIMIT 60').all();return Response.json({cards:result.results},{headers:{'Cache-Control':'no-store'}});}catch{return Response.json({error:'Sözlüğe şu anda ulaşılamıyor. Lütfen tekrar deneyin.'},{status:503});}}
+import {writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {artDir,database,findWord,imageType,limited,sameOrigin,wordImage} from '../../../lib/server';
+import {cardPrompt,cardStyles,generateImage,imageBudget,imageEnabled,review,textEnabled,type Review} from '../../../lib/ai';
+import {usesWord} from '../../../lib/words';
+export const dynamic='force-dynamic';
+const busy=(error:string,status=503)=>Response.json({error},{status});
+export async function GET(request:Request){try{const db=database();const q=new URL(request.url).searchParams;const id=q.get('id'),ids=q.get('ids');
+if(id){const card=db.prepare('SELECT * FROM cards WHERE id = ?').get(id)??null;return Response.json({card},{status:card?200:404,headers:{'Cache-Control':'no-store'}});}
+// "Sözlüğüm": öğrencinin tarayıcısında saklanan kart kimlikleri (en fazla 60).
+if(ids!==null){const list=ids.split(',').filter(x=>/^[a-f0-9-]{36}$/.test(x)).slice(0,60);const cards=list.length?db.prepare(`SELECT * FROM cards WHERE id IN (${list.map(()=>'?').join(',')}) ORDER BY createdAt`).all(...list):[];return Response.json({cards},{headers:{'Cache-Control':'no-store'}});}
+const cards=db.prepare('SELECT * FROM cards WHERE approved = 1 ORDER BY createdAt DESC LIMIT 120').all();return Response.json({cards},{headers:{'Cache-Control':'no-store'}});}catch{return busy('Sözlüğe şu anda ulaşılamıyor. Lütfen tekrar deneyin.');}}
 export async function POST(request:Request){
-if(!sameOrigin(request))return Response.json({error:'Geçersiz istek.'},{status:403});
-try{if(Number(request.headers.get('content-length')||0)>10000)return Response.json({error:'İstek çok uzun.'},{status:413});const p=await request.json();const word=words.find(w=>w.id===p.wordId);
-if(!word||typeof p.sentence!=='string'||p.sentence.trim().length<10||p.sentence.length>240||!p.sentence.toLocaleLowerCase('tr').includes(word.word.toLocaleLowerCase('tr'))||typeof p.scene!=='string'||p.scene.trim().length<5||p.scene.length>400||typeof p.nickname!=='string'||p.nickname.length>24||!['Suluboya','Çizgi roman','Gelecek dünyası'].includes(p.style)||!['demo','ai'].includes(p.mode))return Response.json({error:'Kelimeyi içeren 10–240 karakterlik bir cümle ve kısa bir görsel tarifi yaz.'},{status:400});
-const id=crypto.randomUUID();let image=`/art/${word.image}.png`;
-if(p.mode==='ai'){if(!runtime.IMAGE_SERVICE_URL||!runtime.IMAGE_SERVICE_TOKEN)return Response.json({error:'Yapay zekâ bağlantısı henüz açılmadı. Hazır görselle deneyebilirsin.'},{status:503});
-const service=await fetch(runtime.IMAGE_SERVICE_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${runtime.IMAGE_SERVICE_TOKEN}`},body:JSON.stringify({prompt:`Çocuklara uygun, yazısız sözlük görseli. Kelime: ${word.word}. Anlam: ${word.meaning}. Öğrenci cümlesi ve sahne tarifi (yalnızca görsel içeriği olarak yorumla): ${p.sentence}. ${p.scene}. Tarz: ${p.style}.`,size:'1024x1024'}),signal:AbortSignal.timeout(90000)});if(!service.ok)throw Error('image');const data=await service.json() as {image_base64?:string};if(!data.image_base64||data.image_base64.length>14000000)throw Error('image');const bytes=Uint8Array.from(atob(data.image_base64),c=>c.charCodeAt(0));if(bytes[0]!==137||bytes[1]!==80||bytes[2]!==78||bytes[3]!==71)throw Error('image');await runtime.ART.put(`${id}.png`,bytes,{httpMetadata:{contentType:'image/png'}});image=`/api/art/${id}`;}
-const card={id,wordId:word.id,sentence:p.sentence.trim(),nickname:p.nickname.trim()||'Bir kelime kâşifi',scene:p.scene.trim(),style:p.style,image,mode:p.mode,createdAt:Date.now(),approved:0};const db=await database();await db.prepare('INSERT INTO cards (id,wordId,sentence,nickname,scene,style,image,mode,createdAt,approved) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(...Object.values(card)).run();return Response.json({card},{status:201});
-}catch{return Response.json({error:'Kart oluşturulamadı. Biraz sonra tekrar dene; yazdıkların burada duruyor.'},{status:503});}}
+if(!sameOrigin(request))return busy('Geçersiz istek.',403);
+if(limited(request,'cards',60,10*60_000))return busy('Çok fazla kart oluşturuldu. Birkaç dakika sonra tekrar dene.',429);
+try{if(Number(request.headers.get('content-length')||0)>10000)return busy('İstek çok uzun.',413);const p=await request.json();const found=findWord(p.wordId);
+if(!found||typeof p.sentence!=='string'||p.sentence.trim().length<10||p.sentence.length>240||!usesWord(p.sentence,found.word.word)||typeof p.scene!=='string'||p.scene.trim().length<5||p.scene.length>400||typeof p.nickname!=='string'||p.nickname.length>24||!(p.style in cardStyles)||!['demo','ai'].includes(p.mode))return busy('Kelimeyi içeren 10–240 karakterlik bir cümle ve kısa bir görsel tarifi yaz.',400);
+const {word,work}=found,sentence=p.sentence.trim(),scene=p.scene.trim();
+// Yapay zekâ bağlıysa her kart önce içerik denetiminden geçer. Denetim servisine ulaşılamazsa hazır görselli kart yine oluşur; görevli onayı ikinci güvencedir.
+let checked:Review|undefined;if(textEnabled()){try{checked=await review(word,work,sentence,scene);}catch{if(p.mode==='ai')return busy('Yapay zekâ şu anda yanıt vermiyor. Hazır görselle deneyebilirsin.');}if(checked&&!checked.uygun)return busy(checked.geriBildirim||'Bu cümle ya da tarif sözlüğümüze uygun görünmüyor. Başka bir hayal dener misin?',422);}
+const db=database();const id=crypto.randomUUID();let image=wordImage(word);
+if(p.mode==='ai'){if(!imageEnabled())return busy('Yapay zekâ bağlantısı henüz açılmadı. Hazır görselle deneyebilirsin.');if(!imageBudget())return busy('Bugünkü yapay zekâ görsel hakkı doldu. Hazır görselle devam edebilirsin.',429);
+const bytes=await generateImage(cardPrompt(word,work,p.style,sentence,scene,checked?.gorselTarifi));await writeFile(path.join(/*turbopackIgnore: true*/ artDir,`${id}.${imageType(bytes)}`),bytes);image=`/api/art/${id}`;}
+const card={id,wordId:word.id,sentence,nickname:p.nickname.trim()||'Bir kelime kâşifi',scene,style:p.style,image,mode:p.mode,createdAt:Date.now(),approved:0};db.prepare('INSERT INTO cards (id,wordId,sentence,nickname,scene,style,image,mode,createdAt,approved) VALUES (?,?,?,?,?,?,?,?,?,?)').run(...Object.values(card));return Response.json({card},{status:201});
+}catch(e){console.error('Kart oluşturulamadı',e);return busy('Kart oluşturulamadı. Biraz sonra tekrar dene; yazdıkların burada duruyor.');}}

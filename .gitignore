@@ -43,3 +43,6 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# uygulama verisi (SQLite ve üretilen resimler)
+/data/
