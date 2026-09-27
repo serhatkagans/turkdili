@@ -46,3 +46,6 @@ next-env.d.ts
 
 # uygulama verisi (SQLite ve üretilen resimler)
 /data/
+
+# public/art içindeki resimlerin kopyası
+/agy/

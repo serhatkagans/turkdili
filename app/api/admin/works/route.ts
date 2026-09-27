@@ -1,0 +1,12 @@
+import {authorized,database,sameOrigin,saveCover,text,uniqueId} from '../../../../lib/server';
+import {kinds,months,slug} from '../../../../lib/words';
+export const dynamic='force-dynamic';
+const fail=(error:string,status=400)=>Response.json({error},{status});
+// action:'create' yeni eser ekler; aksi hâlde eserin eylem planı ayını ya da türünü (eser / atasözü-deyim / yabancı sözcük) değiştirir.
+export async function POST(request:Request){if(!authorized(request)||!sameOrigin(request))return fail('Yetkisiz.',403);const p=await request.json().catch(()=>({}));const db=database();
+if(p.action==='create'){const title=text(p.title,2,80),author=text(p.author,2,80),period=text(p.period??'',0,40)??'',month=p.month??'',kind=p.kind||'eser';if(!title||!author)return fail('Eser adı ve yazarı en az 2 karakter olmalı.');if(!(month===''||months.includes(month))||!(kind in kinds))return fail('Geçersiz ay ya da tür.');if(db.prepare('SELECT 1 FROM works WHERE lower(title) = lower(?)').get(title))return fail('Bu adla bir eser zaten var.');const id=uniqueId('works',slug(title));db.prepare('INSERT INTO works (id,title,author,period,month,kind) VALUES (?,?,?,?,?,?)').run(id,title,author,period,month,kind);return Response.json({ok:true,id});}
+if(typeof p.id!=='string'||(p.month!==undefined&&!(p.month===''||months.includes(p.month)))||(p.kind!==undefined&&!(p.kind in kinds)))return fail('Geçersiz eser, ay ya da tür.');
+const old=db.prepare('SELECT month,kind FROM works WHERE id = ?').get(p.id) as {month:string;kind:string}|undefined;if(!old)return fail('Eser bulunamadı.',404);
+db.prepare('UPDATE works SET month = ?,kind = ? WHERE id = ?').run(p.month??old.month,p.kind??old.kind,p.id);return Response.json({ok:true});}
+// Kapak yükleme: gövde doğrudan resim dosyasıdır (PNG, JPG veya WEBP; en fazla 8 MB).
+export async function PUT(request:Request){if(!authorized(request)||!sameOrigin(request))return fail('Yetkisiz.',403);const id=new URL(request.url).searchParams.get('id');if(!id||!database().prepare('SELECT 1 FROM works WHERE id = ?').get(id))return fail('Eser bulunamadı.');if(Number(request.headers.get('content-length')||0)>8_000_000)return fail('Resim 8 MB’tan büyük olamaz.',413);const bytes=Buffer.from(await request.arrayBuffer());if(bytes.length>8_000_000)return fail('Resim 8 MB’tan büyük olamaz.',413);try{await saveCover(id,bytes);return Response.json({ok:true});}catch(e){return fail(e instanceof Error?e.message:'Resim kaydedilemedi.');}}
