@@ -41,10 +41,10 @@ export function removeWordArt(id:string){database();for(const f of readdirSync(w
 export function wordImage(w:Word){const v=illustrated()[w.id];return v?wordArt(w.id,v):art(w.image);}
 export function imageType(b:Buffer){if(b[0]===0x89&&b[1]===0x50&&b[2]===0x4e&&b[3]===0x47)return 'png';if(b[0]===0xff&&b[1]===0xd8&&b[2]===0xff)return 'jpg';if(b.subarray(0,4).toString()==='RIFF'&&b.subarray(8,12).toString()==='WEBP')return 'webp';return undefined;}
 export function contentType(ext:string){return exts[ext];}
-// Görevli girişi kullanıcı adı + şifreyle yapılır; tarayıcıya şifre yerine ondan türetilen oturum anahtarı verilir. Şifre değişince eski oturumlar geçersiz olur.
+// Görevli girişi kullanıcı adı + şifreyle yapılır (kullanıcı adında büyük/küçük harf ve baştaki/sondaki boşluklar önemsenmez; telefon ilk harfi büyütüyor); tarayıcıya şifre yerine ondan türetilen oturum anahtarı verilir. Şifre değişince eski oturumlar geçersiz olur.
 const same=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);};
 export function adminSession(){const {ADMIN_USER:u,ADMIN_PASSWORD:p}=runtime;return u&&p?createHmac('sha256',p).update(`kelimeden-hayale:${u}`).digest('hex'):undefined;}
-export function checkLogin(user:unknown,password:unknown){const {ADMIN_USER:u,ADMIN_PASSWORD:p}=runtime;return !!u&&!!p&&typeof user==='string'&&typeof password==='string'&&same(user.trim(),u)&&same(password,p);}
+export function checkLogin(user:unknown,password:unknown){const {ADMIN_USER:u,ADMIN_PASSWORD:p}=runtime;return !!u&&!!p&&typeof user==='string'&&typeof password==='string'&&same(user.trim().toLowerCase(),u.trim().toLowerCase())&&same(password.trim(),p.trim());}
 export function authorized(request:Request){const s=adminSession();return !!s&&same(request.headers.get('authorization')||'',`Bearer ${s}`);}
 // nginx arkasında request.url iç adresi gösterebilir; bu yüzden Origin, istemcinin gördüğü host ile karşılaştırılır.
 export function sameOrigin(request:Request){const origin=request.headers.get('origin');if(!origin)return true;const host=request.headers.get('x-forwarded-host')||request.headers.get('host');try{return new URL(origin).host===host;}catch{return false;}}
