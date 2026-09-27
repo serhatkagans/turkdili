@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
-import {byMonth,categories,cover,kinds,kindOf,months,ownArt,slug,themes,type Card,type Word,type Work} from '../lib/words';
+import {base,byMonth,categories,cover,kinds,kindOf,months,ownArt,slug,themes,type Card,type Word,type Work} from '../lib/words';
 import {parseCsv,rowsToEntries,toCsv} from '../lib/csv';
 import {fold} from '../lib/game';
 import {readSession,writeSession} from './dict-ui';
@@ -38,13 +38,13 @@ const [pending,setPending]=useState<Card[]>([]),[cardCount,setCardCount]=useStat
 const [filters,setFilters]=useState<Filters>(noFilter),[selected,setSelected]=useState<Set<string>>(new Set()),[editing,setEditing]=useState(''),[confirm,setConfirm]=useState(''),[allImages,setAllImages]=useState(false);
 const [newWork,setNewWork]=useState<NewWorkFields>({title:'',author:'',period:'',month:'',kind:'eser'}),[formKey,setFormKey]=useState(0),[workForm,setWorkForm]=useState<NewWorkFields>({title:'',author:'',period:'',month:'',kind:'eser'});
 const [importText,setImportText]=useState(''),[importPending,setImportPending]=useState(false),[results,setResults]=useState<ImportResult[]>([]);
-async function api(url:string,init:RequestInit={},t=token){const r=await fetch(url,{...init,headers:{...init.headers,Authorization:`Bearer ${t}`}});const d=r.status===204?{}:await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'İşlem tamamlanamadı.');return d;}
+async function api(url:string,init:RequestInit={},t=token){const r=await fetch(base+url,{...init,headers:{...init.headers,Authorization:`Bearer ${t}`}});const d=r.status===204?{}:await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'İşlem tamamlanamadı.');return d;}
 const post=(body:object,url='/api/admin/words')=>api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 async function load(t=token){const [c,d]=await Promise.all([api('/api/admin',{},t),api('/api/admin/words',{},t)]);setPending(c.cards);setCardCount(c.counts??{});setWords(d.words);setWorks(d.works);setIll(d.illustrated);setCov(d.covers);setAi(d.ai);}
 async function run(label:string,job:()=>Promise<void>){setBusy(label);setError('');setNotice('');try{await job();}catch(e){setError(e instanceof Error?e.message:'İşlem tamamlanamadı.');}finally{setBusy('');}}
 // Oturum yalnızca bu sekmede hatırlanır; sekme kapanınca yeniden giriş istenir.
 useEffect(()=>{const t=readSession<string>(tokenKey,'');if(t)Promise.resolve(t).then(load).then(()=>{setToken(t);setLogged(true);}).catch(()=>writeSession(tokenKey,''));},[]);// eslint-disable-line react-hooks/exhaustive-deps
-const login=()=>run('login',async()=>{const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Giriş yapılamadı.');await load(d.token);writeSession(tokenKey,d.token);setToken(d.token);setPassword('');setLogged(true);});
+const login=()=>run('login',async()=>{const r=await fetch(base+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Giriş yapılamadı.');await load(d.token);writeSession(tokenKey,d.token);setToken(d.token);setPassword('');setLogged(true);});
 const logout=()=>{writeSession(tokenKey,'');setToken('');setPassword('');setLogged(false);};
 const done=async(message:string)=>{await load();setSelected(new Set());setConfirm('');setNotice(message);};
 const go=(v:string,f:Partial<Filters>={})=>{setView(v);setFilters({...noFilter,...f});setSelected(new Set());setEditing('');setConfirm('');setError('');setNotice('');setResults([]);scrollTo({top:0});};
@@ -65,7 +65,7 @@ const setMonth=(k:Work,month:string)=>run(k.id,async()=>{await post({id:k.id,mon
 const setKind=(k:Work,kind:string)=>run(k.id,async()=>{await post({id:k.id,kind},'/api/admin/works');await done(`“${k.title}” → ${kinds[kind as keyof typeof kinds].label}.`);});
 const moderate=(id:string,action:string)=>run(id,async()=>{await post({id,action},'/api/admin');await done(action==='approve'?'Kart ortak galeride yayımlandı.':'Kart yayımlanmadı.');});
 const add=(f:Fields)=>run('add',async()=>{const d=await post({action:'create',word:f,newWork:f.work==='__new'?newWork:undefined});setNewWork({title:'',author:'',period:'',month:'',kind:'eser'});setFormKey(k=>k+1);await done(`“${d.word.word}” sözlüğe eklendi. Görselini “Görseller”den yükleyebilirsin.`);});
-const exportCsv=()=>run('export',async()=>{const r=await fetch('/api/admin/export',{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw Error('Dışa aktarılamadı.');download(`sozluk-${new Date().toLocaleDateString('sv')}.csv`,await r.blob());setNotice('Kelime listesi indirildi. Excel’de doğrudan açılabilir.');});
+const exportCsv=()=>run('export',async()=>{const r=await fetch(base+'/api/admin/export',{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw Error('Dışa aktarılamadı.');download(`sozluk-${new Date().toLocaleDateString('sv')}.csv`,await r.blob());setNotice('Kelime listesi indirildi. Excel’de doğrudan açılabilir.');});
 const template=()=>download('sozluk-sablon.csv',toCsv([['Kelime','Eser','Eserdeki anlamı','Günümüzdeki anlamı','Örnek cümle','Ekleyen'],['bilig','Kutadgu Bilig','Bilgi, akıl','Bilgi','Her kitap bana yeni bir bilig kazandırıyor.','Elif, 6-B']]));
 const entries=useMemo(()=>rowsToEntries(parseCsv(importText)),[importText]);
 const importRows=()=>run('import',async()=>{const d=await post({action:'import',rows:entries,pending:importPending});setResults(d.results);const ok=d.results.filter((r:ImportResult)=>r.ok).length;await load();setNotice(`${ok} / ${d.results.length} satır eklendi.`);});

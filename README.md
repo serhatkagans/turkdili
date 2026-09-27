@@ -44,7 +44,7 @@ npm run dev                   # http://localhost:3000
 
 Geliştirme sunucusunu tarayıcıda `localhost` adresiyle açın; `127.0.0.1` ile açıldığında Next geliştirme betikleri yüklenmez ve düğmeler çalışmaz (yayın derlemesinde bu sorun yoktur).
 
-Yayın için `npm run build` ve `npm start`. Uygulama tek bir Node süreci ve SQLite dosyasıyla çalışır; nginx gibi bir ters vekil arkasında VPS'e kurulabilir.
+Yayın için `npm run build` ve `npm start`. Uygulama tek bir Node süreci ve SQLite dosyasıyla çalışır; nginx gibi bir ters vekil arkasında VPS'e kurulabilir. Alt adreste (ör. `aiotechs.cloud/turkdili`) yayın için `.env.local` içine `BASE_PATH=/turkdili` yazıp yeniden derleyin; ters vekil `/turkdili` yolunu önek silmeden uygulamaya iletmelidir.
 
 Denetimler:
 

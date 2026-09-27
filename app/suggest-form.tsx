@@ -1,6 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {byMonth,kindOf,months,themes,usesWord,type Work} from '../lib/words';
+import {base,byMonth,kindOf,months,themes,usesWord,type Work} from '../lib/words';
 const empty={word:'',oldMeaning:'',meaning:'',example:''};
 // Eser listesi eylem planı aylarına göre gruplanır: "Şubat · Kutadgu Bilig ve Dîvânü Lügâti't-Türk Okumaları".
 export function WorkOptions({works}:{works:Work[]}){const groups=[...months,''].map(m=>[m,byMonth(works).filter(k=>m?k.month===m:!months.includes(k.month))] as const).filter(([,ks])=>ks.length);
@@ -12,7 +12,7 @@ const [f,setF]=useState({...empty,work:initialWork||works[0]?.id||'',addedBy:''}
 const set=(k:keyof typeof f)=>(e:{target:{value:string}})=>{setF({...f,[k]:e.target.value});setError('');};
 const work=works.find(k=>k.id===f.work),l=kindOf(work);
 const exampleOk=!f.word.trim()||!f.example.trim()||usesWord(f.example,f.word.trim());
-async function submit(){setBusy(true);setError('');try{const r=await fetch('/api/words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(f)});const d=await r.json();if(!r.ok)throw Error(d.error);setSent(s=>[f.word.trim(),...s]);setF({...f,...empty});}catch(e){setError(e instanceof Error?e.message:'Önerin gönderilemedi.');}finally{setBusy(false);}}
+async function submit(){setBusy(true);setError('');try{const r=await fetch(base+'/api/words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(f)});const d=await r.json();if(!r.ok)throw Error(d.error);setSent(s=>[f.word.trim(),...s]);setF({...f,...empty});}catch(e){setError(e instanceof Error?e.message:'Önerin gönderilemedi.');}finally{setBusy(false);}}
 return <section className="standalone suggest"><div className="eyebrow">YAZAR YA DA ESER SÖZLÜK OLUŞTURMA ETKİNLİĞİ</div><h1>Sözlüğe <em>kelime ekle.</em></h1><p>Okuduğun eserde bilmediğin ya da bugün kullanmadığımız bir kelime, bir atasözü ya da dilimize yerleşmiş yabancı bir sözcük mü buldun? Önce ayın temasını ve eseri seç, sonra anlamını ve bir örnek cümle yaz. Öğretmenin onaylayınca sözlük kitabına, eser kartlarına ve oyunlara eklenir.</p>
 {!!sent.length&&<div className="notice suggest-sent" role="status">✓ <b>{sent[0]}</b> öğretmen onayına gönderildi. {sent.length>1&&<small>Bu oturumda {sent.length} öneri gönderdin: {sent.join(', ')}.</small>}</div>}
 <form className="suggest-form" onSubmit={e=>{e.preventDefault();void submit();}}>

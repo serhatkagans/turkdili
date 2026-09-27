@@ -2,7 +2,7 @@ import {writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {artDir,database,findWord,imageType,limited,sameOrigin,wordImage} from '../../../lib/server';
 import {cardPrompt,cardStyles,generateImage,imageBudget,imageEnabled,review,textEnabled,type Review} from '../../../lib/ai';
-import {usesWord} from '../../../lib/words';
+import {base,usesWord} from '../../../lib/words';
 export const dynamic='force-dynamic';
 const busy=(error:string,status=503)=>Response.json({error},{status});
 export async function GET(request:Request){try{const db=database();const q=new URL(request.url).searchParams;const id=q.get('id'),ids=q.get('ids');
@@ -20,6 +20,6 @@ const {word,work}=found,sentence=p.sentence.trim(),scene=p.scene.trim();
 let checked:Review|undefined;if(textEnabled()){try{checked=await review(word,work,sentence,scene);}catch{if(p.mode==='ai')return busy('Yapay zekâ şu anda yanıt vermiyor. Hazır görselle deneyebilirsin.');}if(checked&&!checked.uygun)return busy(checked.geriBildirim||'Bu cümle ya da tarif sözlüğümüze uygun görünmüyor. Başka bir hayal dener misin?',422);}
 const db=database();const id=crypto.randomUUID();let image=wordImage(word);
 if(p.mode==='ai'){if(!imageEnabled())return busy('Yapay zekâ bağlantısı henüz açılmadı. Hazır görselle deneyebilirsin.');if(!imageBudget())return busy('Bugünkü yapay zekâ görsel hakkı doldu. Hazır görselle devam edebilirsin.',429);
-const bytes=await generateImage(cardPrompt(word,work,p.style,sentence,scene,checked?.gorselTarifi));await writeFile(path.join(/*turbopackIgnore: true*/ artDir,`${id}.${imageType(bytes)}`),bytes);image=`/api/art/${id}`;}
+const bytes=await generateImage(cardPrompt(word,work,p.style,sentence,scene,checked?.gorselTarifi));await writeFile(path.join(/*turbopackIgnore: true*/ artDir,`${id}.${imageType(bytes)}`),bytes);image=`${base}/api/art/${id}`;}
 const card={id,wordId:word.id,sentence,nickname:p.nickname.trim()||'Bir kelime kâşifi',scene,style:p.style,image,mode:p.mode,createdAt:Date.now(),approved:0};db.prepare('INSERT INTO cards (id,wordId,sentence,nickname,scene,style,image,mode,createdAt,approved) VALUES (?,?,?,?,?,?,?,?,?,?)').run(...Object.values(card));return Response.json({card},{status:201});
 }catch(e){console.error('Kart oluşturulamadı',e);return busy('Kart oluşturulamadı. Biraz sonra tekrar dene; yazdıkların burada duruyor.');}}

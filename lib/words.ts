@@ -104,11 +104,13 @@ const seedRows:Seed[]=[
 ['gafil','hikmetler','Bilgisiz, dikkatsiz','Dikkatsiz, olup bitenden habersiz. “Gafil avlanmak” deyiminde yaşar.','Gafil davranıp ödevimi evde unuttum.','Hayal','ga • fil','⌛','clouds','Ağacın altında uyuyakalmış bir gencin yanından geçen tavşan'],
 ['zikir','hikmetler','Anma, Allah’ı anma','Anma. Bugün “zikretmek” (anmak) biçiminde kullanılır.','Öğretmenimiz, bilim insanlarını saygıyla zikretti.','Değerler','zi • kir','✺','stars','Yıldızlı bir gecede sessizce gökyüzünü seyreden bir derviş']];
 export type Card = {id:string;wordId:string;sentence:string;nickname:string;scene:string;style:string;image:string;mode:string;createdAt:number;approved:number};
-export const art=(name:string)=>name.includes('.')?`/art/${name}`:`/art/${name}.png`;
+// Alt adreste yayında (BASE_PATH) bütün yerel adreslerin önüne eklenir; next.config.ts derlemede doldurur.
+export const base=process.env.NEXT_PUBLIC_BASE_PATH||'';
+export const art=(name:string)=>name.includes('.')?`${base}/art/${name}`:`${base}/art/${name}.png`;
 // Kelimeye özel resim: yüklenmiş dosya ya da public/art altındaki çizim. Yoksa null ("Görsel bekleniyor").
 export const ownArt=(w:Word,illustrated:Record<string,number>)=>illustrated[w.id]?wordArt(w.id,illustrated[w.id]):w.image.includes('.')?art(w.image):null;
-export const cover=(id:string,version:number)=>`/api/cover/${id}?v=${version}`;
-export const wordArt=(id:string,version:number)=>`/api/word-art/${id}?v=${version}`;
+export const cover=(id:string,version:number)=>`${base}/api/cover/${id}?v=${version}`;
+export const wordArt=(id:string,version:number)=>`${base}/api/word-art/${id}?v=${version}`;
 export const workOf=(works:Work[],w:Word)=>works.find(x=>x.id===w.work)??{id:w.work,title:'',author:'',period:'',month:'',kind:'eser'};
 // Türkçe harfleri sadeleştirip adres dostu kimlik üretir: "Çalıkuşu" → "calikusu".
 const ascii:Record<string,string>={ç:'c',ğ:'g',ı:'i',ö:'o',ş:'s',ü:'u',â:'a',î:'i',û:'u',ñ:'n',ŋ:'n'};
